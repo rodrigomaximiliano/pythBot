@@ -72,7 +72,7 @@ def generar_respuesta_ia(
     system_prompt: str,
     history: Optional[List[Any]],
     text: str,
-    max_length: int = 1000,
+    max_length: int = 100,
     top_k: int = 50,
     top_p: float = 0.95,
     temperature: float = 0.7,
@@ -83,34 +83,46 @@ def generar_respuesta_ia(
     Devuelve la respuesta y el nuevo chat_history_ids.
     """
     try:
-        system_input_ids = tokenizer.encode(system_prompt + tokenizer.eos_token, return_tensors="pt")
-        limited_history = history[-3:] if history else []
-        if limited_history:
-            bot_input_ids = torch.cat(
-                [system_input_ids] + limited_history + [tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt")],
-                dim=-1
-            )
-        else:
-            bot_input_ids = torch.cat(
-                [system_input_ids, tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt")],
-                dim=-1
-            )
-
-        chat_history_ids = model.generate(
-            bot_input_ids,
-            max_length=max_length,
-            pad_token_id=tokenizer.eos_token_id,
+        # Preparamos el texto de entrada con el historial
+        input_text = system_prompt + "\n"
+        
+        if history:
+            for msg in history[-5:]:  # Usar solo los últimos 5 mensajes para no exceder el tamaño máximo
+                role = "Usuario" if msg.get("role") == "user" else "Asistente"
+                input_text += f"{role}: {msg.get('content', '')}\n"
+        
+        input_text += f"Usuario: {text}\nAsistente:"
+        
+        # Codificamos la entrada
+        inputs = tokenizer(input_text, return_tensors="pt", max_length=512, truncation=True)
+        
+        # Generamos la respuesta
+        outputs = model.generate(
+            inputs["input_ids"],
+            max_length=len(inputs["input_ids"][0]) + max_length,
             do_sample=True,
             top_k=top_k,
             top_p=top_p,
             temperature=temperature,
-            num_return_sequences=num_return_sequences
+            num_return_sequences=num_return_sequences,
+            pad_token_id=tokenizer.eos_token_id
         )
-        respuesta = tokenizer.decode(chat_history_ids[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
-        respuesta = limpiar_respuesta(respuesta)
-        if not respuesta:
-            respuesta = "No entendí tu mensaje, ¿puedes reformularlo?"
-        return respuesta, chat_history_ids
+        
+        # Decodificamos la respuesta
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Extraemos solo la parte de la respuesta del asistente
+        response = response.split("Asistente:")[-1].strip()
+        
+        # Limpiamos la respuesta
+        response = limpiar_respuesta(response)
+        
+        # Si la respuesta es muy genérica, intentamos mejorarla
+        if es_respuesta_no_entendida(response):
+            response = reforzar_respuesta_ia(response, "¿Podrías ser más específico con tu pregunta?")
+        
+        return response, None
+        
     except Exception as e:
-        logging.error(f"Error en generar_respuesta_ia: {e}")
-        return "Ocurrió un error al generar la respuesta de IA.", None
+        logging.error(f"Error al generar respuesta: {str(e)}")
+        return "Lo siento, ha ocurrido un error al procesar tu solicitud. Por favor, inténtalo de nuevo más tarde.", None
