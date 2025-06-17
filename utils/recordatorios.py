@@ -5,7 +5,17 @@ Incluye funciones para crear, listar y gestionar recordatorios.
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timedelta
 import uuid
+import json # Importar json
+import os # Importar os
 from .date_utils import get_current_datetime, is_future_datetime, format_datetime, get_time_until
+
+# Nombre del archivo para guardar los recordatorios
+RECORDATORIOS_FILE = "data/recordatorios.json"
+
+# Asegurarse de que el directorio de datos exista
+DATA_DIR = "data"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
 class Recordatorio:
     """Clase que representa un recordatorio."""
@@ -23,10 +33,88 @@ class Recordatorio:
     
     def __str__(self) -> str:
         tiempo_restante = get_time_until(self.fecha)
-        return f"{self.texto} ({tiempo_remaining} - {format_datetime(self.fecha)})"
+        return f"{self.texto} ({tiempo_restante} - {format_datetime(self.fecha)})"
 
 # Estructura: {session_id: {recordatorio_id: Recordatorio}}
 _recordatorios: Dict[str, Dict[str, Recordatorio]] = {}
+
+def _guardar_recordatorios():
+    """Guarda los recordatorios en un archivo JSON."""
+    data_to_save = {}
+    for session_id, recordatorios_sesion in _recordatorios.items():
+        data_to_save[session_id] = {}
+        for recordatorio_id, recordatorio in recordatorios_sesion.items():
+            data_to_save[session_id][recordatorio_id] = {
+                "id": recordatorio.id,
+                "texto": recordatorio.texto,
+                "fecha": recordatorio.fecha.isoformat(), # Convertir datetime a string ISO
+                "recurrente": recordatorio.recurrente,
+                "intervalo": str(recordatorio.intervalo) if recordatorio.intervalo else None, # Convertir timedelta a string
+                "max_repeticiones": recordatorio.max_repeticiones,
+                "repeticiones": recordatorio.repeticiones,
+                "activo": recordatorio.activo
+            }
+    
+    with open(RECORDATORIOS_FILE, "w") as f:
+        json.dump(data_to_save, f, indent=4)
+
+def _cargar_recordatorios():
+    """Carga los recordatorios desde un archivo JSON."""
+    global _recordatorios
+    if not os.path.exists(RECORDATORIOS_FILE):
+        _recordatorios = {}
+        return
+        
+    with open(RECORDATORIOS_FILE, "r") as f:
+        try:
+            data_loaded = json.load(f)
+            _recordatorios = {}
+            for session_id, recordatorios_sesion_data in data_loaded.items():
+                _recordatorios[session_id] = {}
+                for recordatorio_id, recordatorio_data in recordatorios_sesion_data.items():
+                    # Convertir string ISO a datetime
+                    fecha = datetime.fromisoformat(recordatorio_data["fecha"])
+                    # Convertir string de intervalo a timedelta
+                    intervalo = timedelta() # Valor por defecto
+                    if recordatorio_data.get("intervalo"):
+                         # Esto es una conversión básica, puede necesitar mejoras
+                         try:
+                             # Asumimos formato "DD days, HH:MM:SS" o similar de str(timedelta)
+                             parts = recordatorio_data["intervalo"].split(',')
+                             days = 0
+                             seconds = 0
+                             for part in parts:
+                                 part = part.strip()
+                                 if 'day' in part:
+                                     days = int(part.split(' ')[0])
+                                 elif ':' in part:
+                                     h, m, s = map(int, part.split(':'))
+                                     seconds = h * 3600 + m * 60 + s
+                             intervalo = timedelta(days=days, seconds=seconds)
+                         except Exception as e:
+                             print(f"Error al parsear intervalo: {recordatorio_data.get('intervalo')} - {e}")
+                             intervalo = None # Si falla el parseo, establecer a None
+
+
+                    _recordatorios[session_id][recordatorio_id] = Recordatorio(
+                        id=recordatorio_data["id"],
+                        texto=recordatorio_data["texto"],
+                        fecha=fecha,
+                        recurrente=recordatorio_data.get("recurrente", False),
+                        intervalo=intervalo,
+                        max_repeticiones=recordatorio_data.get("max_repeticiones"),
+                        repeticiones=recordatorio_data.get("repeticiones", 0),
+                        activo=recordatorio_data.get("activo", True)
+                    )
+        except json.JSONDecodeError:
+            # Si el archivo está vacío o corrupto, inicializar recordatorios vacíos
+            _recordatorios = {}
+        except Exception as e:
+            print(f"Error al cargar recordatorios: {e}")
+            _recordatorios = {} # En caso de otros errores de carga
+
+# Cargar recordatorios al iniciar el módulo
+_cargar_recordatorios()
 
 def agregar_recordatorio(
     session_id: str, 
@@ -79,6 +167,7 @@ def agregar_recordatorio(
     )
     
     _recordatorios[session_id][recordatorio_id] = recordatorio
+    _guardar_recordatorios() # Guardar después de agregar
     return True, f"Recordatorio creado para {format_datetime(fecha)}"
 
 def obtener_recordatorios(session_id: str, solo_activos: bool = True) -> List[Recordatorio]:
@@ -134,13 +223,15 @@ def marcar_como_completado(session_id: str, recordatorio_id: str) -> bool:
     if not recordatorio.recurrente:
         # Eliminar recordatorio no recurrente
         del _recordatorios[session_id][recordatorio_id]
+        _guardar_recordatorios() # Guardar después de eliminar
         return True
     
     # Manejar recordatorio recurrente
-    if (recordatorio.max_repeticiones is not None and 
+    if (recordatorio.max_repeticiones is not None and
         recordatorio.repeticiones >= recordatorio.max_repeticiones):
         # Se alcanzó el máximo de repeticiones
         del _recordatorios[session_id][recordatorio_id]
+        _guardar_recordatorios() # Guardar después de eliminar
         return True
     
     # Programar próxima repetición
@@ -149,15 +240,21 @@ def marcar_como_completado(session_id: str, recordatorio_id: str) -> bool:
     
     # Si la nueva fecha ya pasó, intentar con la siguiente repetición
     if not is_future_datetime(recordatorio.fecha):
-        return marcar_como_completado(session_id, recordatorio_id)
+        # Llamada recursiva para encontrar la próxima fecha válida y guardar
+        result = marcar_como_completado(session_id, recordatorio_id)
+        if result: # Si la llamada recursiva tuvo éxito (encontró una fecha futura o eliminó)
+             _guardar_recordatorios() # Guardar después de la actualización recursiva
+        return result
     
+    _guardar_recordatorios() # Guardar después de actualizar la fecha
     return True
 
 def eliminar_recordatorio(session_id: str, recordatorio_id: str) -> bool:
     """Elimina un recordatorio."""
-    if (session_id in _recordatorios and 
+    if (session_id in _recordatorios and
         recordatorio_id in _recordatorios[session_id]):
         del _recordatorios[session_id][recordatorio_id]
+        _guardar_recordatorios() # Guardar después de eliminar
         return True
     return False
 
@@ -188,5 +285,6 @@ def limpiar_recordatorios_completados(session_id: str) -> int:
         if not _recordatorios[session_id][recordatorio_id].activo:
             del _recordatorios[session_id][recordatorio_id]
             total += 1
+    _guardar_recordatorios() # Guardar después de limpiar
     
     return total

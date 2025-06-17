@@ -40,6 +40,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="items" // Nombre del archivo de la pantalla (items.tsx)
+        options={{
+          title: 'Mis Items', // Título de la pestaña
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />, // Icono para la pestaña
+        }}
+      />
     </Tabs>
   );
 }

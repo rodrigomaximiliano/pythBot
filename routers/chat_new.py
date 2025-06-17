@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import numpy as np
+import random
 
 # Añadir el directorio raíz al path para importaciones
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,6 +50,7 @@ class Intent(str, Enum):
     CREATE_REMINDER = "create_reminder"
     LIST_REMINDERS = "list_reminders"
     DELETE_REMINDER = "delete_reminder"
+    DATE_QUERY = "date_query"
     UNKNOWN = "unknown"
 
 # Entidades que podemos extraer
@@ -126,6 +128,24 @@ class IntentClassifier:
                 "Muéstrame mis recordatorios",
                 "¿Qué recordatorios hay?",
                 "¿Tengo algo programado?"
+            ],
+            "date_query": [
+                "¿Qué día es mañana?",
+                "¿Qué día es hoy?",
+                "¿Qué día cae el próximo lunes?",
+                "¿Qué día es en 3 días?",
+                "¿Qué día será el 25 de diciembre?",
+                "¿Qué día de la semana es hoy?",
+                "¿Qué día es la semana que viene?",
+                "¿Qué día es el próximo mes?",
+                "¿Qué día es mañana?",
+                "¿Qué día es hoy?",
+                "¿Qué día es mañana?",
+                "¿Qué día es hoy?",
+                "¿Qué día es mañana?",
+                "¿Qué día es hoy?",
+                "¿Qué día es mañana?",
+                "¿Qué día es hoy?"
             ]
         }
     
@@ -310,16 +330,158 @@ def extract_entities(text: str) -> Dict[str, Any]:
     
     return entities
 
-def generate_response(intent: Intent, entities: Dict[str, Any], session_id: str) -> str:
+def get_spanish_weekday(weekday: int) -> str:
+    """Convierte el número del día de la semana a su nombre en español."""
+    weekdays = [
+        "lunes", "martes", "miércoles", "jueves", 
+        "viernes", "sábado", "domingo"
+    ]
+    return weekdays[weekday % 7]
+
+def get_spanish_month(month: int) -> str:
+    """Convierte el número del mes a su nombre en español."""
+    months = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    ]
+    return months[month - 1]
+
+def get_current_time() -> str:
+    """Obtiene la hora actual formateada en español."""
+    now = datetime.now()
+    hora = now.hour
+    minutos = now.minute
+    
+    # Formatear la hora en formato 12 horas
+    periodo = "a.m." if hora < 12 else "p.m."
+    hora_12 = hora % 12
+    if hora_12 == 0:
+        hora_12 = 12
+        
+    return f"Son las {hora_12}:{minutos:02d} {periodo}"
+
+def get_date_info(date_str: str) -> str:
+    """
+    Obtiene información sobre una fecha específica.
+    
+    Args:
+        date_str: Cadena con la fecha a analizar (hoy, mañana, etc.)
+        
+    Returns:
+        str: Información sobre la fecha
+    """
+    now = datetime.now()
+    
+    # Verificar si es una consulta de hora
+    if any(palabra in date_str.lower() for palabra in ['qué hora es', 'que hora es', 'dime la hora']):
+        return get_current_time()
+    
+    # Configurar localización en español
+    import locale
+    try:
+        locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+    except:
+        locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
+    
+    # Manejo de fechas relativas
+    lower_str = date_str.lower()
+    
+    if 'semana pasada' in lower_str:
+        date = now - timedelta(weeks=1)
+        dia_semana = get_spanish_weekday(date.weekday())
+        mes = get_spanish_month(date.month)
+        return f"La semana pasada fue del {date.day - date.weekday()} al {date.day - date.weekday() + 6} de {mes} de {date.year}"
+    
+    elif 'mañana' in lower_str or 'dia siguiente' in lower_str:
+        date = now + timedelta(days=1)
+        dia_semana = get_spanish_weekday(date.weekday())
+        mes = get_spanish_month(date.month)
+        return f"Mañana es {dia_semana.capitalize()} {date.day} de {mes} de {date.year}"
+    
+    elif 'hoy' in lower_str:
+        dia_semana = get_spanish_weekday(now.weekday())
+        mes = get_spanish_month(now.month)
+        return f"Hoy es {dia_semana.capitalize()} {now.day} de {mes} de {now.year}"
+    
+    elif 'semana que viene' in lower_str or 'próxima semana' in lower_str or 'proxima semana' in lower_str:
+        next_week = now + timedelta(weeks=1)
+        dia_semana = get_spanish_weekday(next_week.weekday())
+        mes = get_spanish_month(next_week.month)
+        next_monday = now + timedelta(days=(7 - now.weekday()) % 7)
+        next_sunday = next_monday + timedelta(days=6)
+        return f"La semana que viene es del {next_monday.day} al {next_sunday.day} de {mes} de {next_week.year}"
+    
+    elif 'pasado mañana' in lower_str:
+        date = now + timedelta(days=2)
+        dia_semana = get_spanish_weekday(date.weekday())
+        mes = get_spanish_month(date.month)
+        return f"Pasado mañana es {dia_semana.capitalize()} {date.day} de {mes} de {date.year}"
+    
+    elif 'ayer' in lower_str:
+        date = now - timedelta(days=1)
+        dia_semana = get_spanish_weekday(date.weekday())
+        mes = get_spanish_month(date.month)
+        return f"Ayer fue {dia_semana.capitalize()} {date.day} de {mes} de {date.year}"
+    
+    else:
+        # Intentar parsear la fecha
+        try:
+            cal = pdt.Calendar()
+            date, parse_status = cal.parseDT(date_str)
+            if parse_status > 0:  # Si se pudo parsear la fecha
+                dia_semana = get_spanish_weekday(date.weekday())
+                mes = get_spanish_month(date.month)
+                return f"El {dia_semana.capitalize()} {date.day} de {mes} de {date.year}"
+        except:
+            pass
+        
+        # Si no se pudo determinar la fecha, devolver la fecha actual
+        dia_semana = get_spanish_weekday(now.weekday())
+        mes = get_spanish_month(now.month)
+        return f"Hoy es {dia_semana.capitalize()} {now.day} de {mes} de {now.year}"
+
+def generate_response(intent: Intent, entities: Dict[str, Any], session_id: str, original_message: str = "") -> str:
     """
     Genera una respuesta basada en la intención y entidades detectadas.
+    
+    Args:
+        intent: Intención detectada
+        entities: Entidades extraídas del mensaje
+        session_id: ID de la sesión
+        original_message: Mensaje original del usuario (opcional)
+        
+    Returns:
+        str: Respuesta generada
     """
     # Obtener el historial de la conversación
     if session_id not in chat_histories:
         chat_histories[session_id] = []
     
     # Manejar la intención detectada
-    if intent == Intent.GREETING:
+    lower_message = original_message.lower()
+    
+    # Manejar consultas sobre el clima
+    if any(word in lower_message for word in [
+        'hace frío', 'hace calor', 'qué temperatura', 'que temperatura',
+        'cómo está el clima', 'como esta el clima', 'qué tiempo hace',
+        'que tiempo hace', 'va a llover', 'hace sol', 'está nublado',
+        'esta nublado', 'pronóstico', 'pronostico'
+    ]):
+        return "Actualmente no tengo acceso a información meteorológica en tiempo real. " \
+               "¿Te gustaría que te ayude con algo más?"
+    
+    # Manejar consultas de fecha y hora
+    if (intent == Intent.DATE_QUERY or 
+        any(word in lower_message for word in [
+            'qué día', 'que dia', 
+            'qué fecha', 'que fecha', 
+            'mañana', 'hoy', 
+            'semana que viene',
+            'qué hora es', 'que hora es',
+            'dime la hora'
+        ])):
+        return get_date_info(original_message)
+    elif intent == Intent.GREETING:
         responses = [
             "¡Hola! Soy tu asistente personal. ¿En qué puedo ayudarte hoy?",
             "¡Hola! ¿Cómo estás? Estoy aquí para ayudarte.",
@@ -347,19 +509,24 @@ def generate_response(intent: Intent, entities: Dict[str, Any], session_id: str)
         return random.choice(responses)
     
     elif intent == Intent.HELP:
-        return """¡Claro! Puedo ayudarte con:
-        
-📅 **Recordatorios**
-- Crear: "Recuérdame llamar al médico mañana a las 3pm"
-- Ver: "¿Qué recordatorios tengo?"
-- Eliminar: "Elimina mi recordatorio de..."
+        return """🤖 *¿En qué puedo ayudarte?*
 
-📝 **Otras funciones**
-- Responder preguntas generales
-- Hacer búsquedas
-- Conversar contigo
+📅 *Fechas y Horas*
+• "¿Qué día es hoy/mañana?"
+• "¿Qué hora es?"
+• "¿Qué día cae el próximo lunes?"
 
-¿En qué necesitas ayuda?"""
+⏰ *Recordatorios*
+• "Recuérdame [tarea] [fecha/hora]"
+• "¿Qué recordatorios tengo?"
+• "Elimina mi recordatorio de..."
+
+💬 *Pregúntame*
+• "¿Qué puedes hacer?"
+• "¿Cómo estás?"
+• "Gracias"
+
+¡Pregunta lo que necesites! 😊"""
     
     elif intent == Intent.CREATE_REMINDER:
         task = entities.get('task', '').strip()
@@ -510,7 +677,7 @@ async def chat_endpoint(
         print(f"Entidades extraídas: {json.dumps(entities, indent=2, ensure_ascii=False)}")
         
         # Generar respuesta basada en la intención
-        response_text = generate_response(intent, entities, session_id)
+        response_text = generate_response(intent, entities, session_id, message)
         
         # Crear mensajes para el historial
         user_message = Message(

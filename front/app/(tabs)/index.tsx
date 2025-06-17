@@ -21,81 +21,113 @@ interface Message {
   text: string;
   sender: 'user' | 'bot';
   timestamp: Date;
+  suggestions?: string[]; // Añadir campo opcional para sugerencias
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f0f0', // Fondo ligeramente gris
   },
   chatContainer: {
     flex: 1,
-    padding: 8,
+    paddingHorizontal: 10, // Espaciado horizontal
+    paddingVertical: 5, // Espaciado vertical
   },
   messageList: {
     flex: 1,
   },
   messageContainer: {
-    maxWidth: '80%',
-    marginVertical: 4,
-    padding: 12,
-    borderRadius: 16,
+    maxWidth: '85%', // Aumentar un poco el ancho máximo
+    marginVertical: 5, // Espacio vertical entre mensajes
+    padding: 10, // Relleno dentro de la burbuja
+    borderRadius: 15, // Bordes más redondeados
+    elevation: 1, // Sombra sutil para Android
+    shadowColor: '#000', // Sombra sutil para iOS
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1.5,
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#007AFF',
-    borderBottomRightRadius: 4,
+    backgroundColor: '#007AFF', // Azul de iOS
+    borderBottomRightRadius: 5, // Ajustar radio de la esquina inferior derecha
   },
   botMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#e9e9eb',
-    borderBottomLeftRadius: 4,
+    backgroundColor: '#FFFFFF', // Fondo blanco para mensajes del bot
+    borderBottomLeftRadius: 5, // Ajustar radio de la esquina inferior izquierda
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 20,
+    lineHeight: 22, // Aumentar interlineado
+    paddingHorizontal: 5, // Espaciado horizontal dentro del texto
   },
   userMessageText: {
-    color: '#fff',
+    color: '#fff', // Texto blanco para mensajes del usuario
   },
   botMessageText: {
-    color: '#000',
+    color: '#333', // Texto oscuro para mensajes del bot
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 12,
-    backgroundColor: '#fff',
+    alignItems: 'center', // Centrar verticalmente los elementos
+    paddingHorizontal: 10, // Espaciado horizontal
+    paddingVertical: 8, // Espaciado vertical
+    backgroundColor: '#fff', // Fondo blanco
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
   },
   textInput: {
     flex: 1,
-    minHeight: 48,
-    maxHeight: 120,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: '#f0f0f0',
+    minHeight: 40, // Altura mínima
+    maxHeight: 100, // Altura máxima
+    paddingHorizontal: 15, // Espaciado horizontal
+    paddingVertical: 10, // Espaciado vertical
+    borderRadius: 20, // Bordes redondeados
+    backgroundColor: '#f9f9f9', // Fondo ligeramente gris para el input
     fontSize: 16,
-    color: '#000',
+    color: '#333', // Color de texto
+    borderWidth: 1, // Borde sutil
+    borderColor: '#e0e0e0', // Color del borde
+    marginRight: 8, // Espacio a la derecha del input
   },
   sendButton: {
-    marginLeft: 8,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#007AFF',
+    width: 44, // Ancho del botón
+    height: 44, // Altura del botón
+    borderRadius: 22, // Bordes completamente redondeados
+    backgroundColor: '#007AFF', // Color de fondo
     justifyContent: 'center',
     alignItems: 'center',
+    // Eliminar marginLeft ya que el TextInput tiene marginRight
   },
   loadingContainer: {
     padding: 16,
     alignItems: 'center',
   },
   timestamp: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
+    fontSize: 11, // Tamaño de fuente más pequeño
+    color: '#888', // Color más sutil
+    marginTop: 2, // Espacio superior
+    alignSelf: 'flex-end', // Alinear a la derecha dentro de la burbuja
+    paddingHorizontal: 5, // Espaciado horizontal
+  },
+  suggestionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', // Permitir que las sugerencias se envuelvan en varias líneas
+    marginTop: 8, // Espacio superior
+  },
+  suggestionButton: {
+    backgroundColor: '#e0e0e0', // Fondo gris claro para los botones de sugerencia
+    borderRadius: 15, // Bordes redondeados
+    paddingVertical: 6, // Relleno vertical
+    paddingHorizontal: 12, // Relleno horizontal
+    marginRight: 8, // Espacio a la derecha
+    marginBottom: 8, // Espacio inferior
+  },
+  suggestionButtonText: {
+    fontSize: 14, // Tamaño de fuente
+    color: '#333', // Color de texto oscuro
   },
 });
 
@@ -196,6 +228,10 @@ export default function ChatScreen() {
           : 'No pude procesar tu solicitud',
         sender: 'bot',
         timestamp: new Date(),
+        // Guardar las sugerencias si existen en la respuesta
+        suggestions: (typeof responseData === 'object' && responseData !== null && 'suggestions' in responseData && Array.isArray(responseData.suggestions))
+          ? responseData.suggestions as string[]
+          : [],
       };
 
       console.log('Mensaje del bot creado:', botMessage);
@@ -257,12 +293,31 @@ export default function ChatScreen() {
         <ThemedText style={styles.timestamp}>
           {formatTime(msg.timestamp)}
         </ThemedText>
+        {/* Mostrar sugerencias si existen y el mensaje es del bot */}
+        {msg.sender === 'bot' && msg.suggestions && msg.suggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            {msg.suggestions.map((suggestion, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.suggestionButton}
+                onPress={() => {
+                  // Al hacer clic en una sugerencia, establecer el texto en el input
+                  setMessage(suggestion);
+                  // Opcionalmente, enviar el mensaje automáticamente
+                  // sendMessage();
+                }}
+              >
+                <ThemedText style={styles.suggestionButtonText}>{suggestion}</ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
-
+ 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
