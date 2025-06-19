@@ -10,6 +10,7 @@ import {
   TouchableOpacity 
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Colors } from '@constants/Colors';
 
 import { API_URL } from '@constants/Api';
 import { ThemedText } from '@components/ThemedText';
@@ -22,12 +23,13 @@ interface Message {
   sender: 'user' | 'bot';
   timestamp: Date;
   suggestions?: string[]; // Añadir campo opcional para sugerencias
+  intent?: string; // Añadir campo opcional para la intención
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0', // Fondo ligeramente gris
+    backgroundColor: Colors.light.background, // Usar color de fondo del tema
   },
   chatContainer: {
     flex: 1,
@@ -50,12 +52,12 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#007AFF', // Azul de iOS
+    backgroundColor: Colors.light.tint, // Usar color de tinte del tema
     borderBottomRightRadius: 5, // Ajustar radio de la esquina inferior derecha
   },
   botMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF', // Fondo blanco para mensajes del bot
+    backgroundColor: '#E5E5EA', // Un gris claro para mensajes del bot
     borderBottomLeftRadius: 5, // Ajustar radio de la esquina inferior izquierda
   },
   messageText: {
@@ -64,19 +66,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5, // Espaciado horizontal dentro del texto
   },
   userMessageText: {
-    color: '#fff', // Texto blanco para mensajes del usuario
+    color: '#fff', // Texto blanco para mensajes del usuario (contrasta bien con el tinte)
   },
   botMessageText: {
-    color: '#333', // Texto oscuro para mensajes del bot
+    color: Colors.light.text, // Usar color de texto del tema
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center', // Centrar verticalmente los elementos
     paddingHorizontal: 10, // Espaciado horizontal
     paddingVertical: 8, // Espaciado vertical
-    backgroundColor: '#fff', // Fondo blanco
+    backgroundColor: Colors.light.background, // Usar color de fondo del tema
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#ccc', // Borde más claro
   },
   textInput: {
     flex: 1,
@@ -85,18 +87,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15, // Espaciado horizontal
     paddingVertical: 10, // Espaciado vertical
     borderRadius: 20, // Bordes redondeados
-    backgroundColor: '#f9f9f9', // Fondo ligeramente gris para el input
+    backgroundColor: '#f0f0f0', // Fondo ligeramente gris para el input
     fontSize: 16,
-    color: '#333', // Color de texto
-    borderWidth: 1, // Borde sutil
-    borderColor: '#e0e0e0', // Color del borde
+    color: Colors.light.text, // Usar color de texto del tema
+    borderWidth: 0, // Eliminar borde
+    // borderColor: '#e0e0e0', // Color del borde
     marginRight: 8, // Espacio a la derecha del input
   },
   sendButton: {
     width: 44, // Ancho del botón
     height: 44, // Altura del botón
     borderRadius: 22, // Bordes completamente redondeados
-    backgroundColor: '#007AFF', // Color de fondo
+    backgroundColor: Colors.light.tint, // Usar color de tinte del tema
     justifyContent: 'center',
     alignItems: 'center',
     // Eliminar marginLeft ya que el TextInput tiene marginRight
@@ -107,7 +109,7 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 11, // Tamaño de fuente más pequeño
-    color: '#888', // Color más sutil
+    color: '#666', // Color más sutil
     marginTop: 2, // Espacio superior
     alignSelf: 'flex-end', // Alinear a la derecha dentro de la burbuja
     paddingHorizontal: 5, // Espaciado horizontal
@@ -118,7 +120,7 @@ const styles = StyleSheet.create({
     marginTop: 8, // Espacio superior
   },
   suggestionButton: {
-    backgroundColor: '#e0e0e0', // Fondo gris claro para los botones de sugerencia
+    backgroundColor: '#ddd', // Fondo gris claro para los botones de sugerencia
     borderRadius: 15, // Bordes redondeados
     paddingVertical: 6, // Relleno vertical
     paddingHorizontal: 12, // Relleno horizontal
@@ -127,7 +129,11 @@ const styles = StyleSheet.create({
   },
   suggestionButtonText: {
     fontSize: 14, // Tamaño de fuente
-    color: '#333', // Color de texto oscuro
+    color: Colors.light.text, // Usar color de texto del tema
+  },
+  botContent: { // Nuevo estilo para el contenido del bot (icono + texto)
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
 });
 
@@ -280,6 +286,38 @@ export default function ChatScreen() {
       styles.messageText,
       isUser ? styles.userMessageText : styles.botMessageText,
     ];
+    // const botContentStyle = { flexDirection: 'row', alignItems: 'flex-start' }; // Estilo para el contenido del bot (icono + texto) - Eliminado
+
+    // Determinar el icono basado en la intención
+    let iconName: keyof typeof MaterialIcons.glyphMap | null = null;
+    let iconColor = Colors.light.text; // Color por defecto
+
+    if (msg.sender === 'bot' && msg.intent) {
+      switch (msg.intent) {
+        case 'greeting':
+          iconName = 'waving-hand';
+          break;
+        case 'farewell':
+          iconName = 'waving-hand'; // O 'logout', 'exit-to-app'
+          break;
+        case 'create_reminder':
+          iconName = 'alarm-add';
+          break;
+        case 'list_reminders':
+          iconName = 'list-alt';
+          break;
+        case 'date_query':
+          iconName = 'calendar-today';
+          break;
+        case 'help':
+          iconName = 'help-outline';
+          break;
+        // Puedes añadir más casos para otras intenciones
+        default:
+          iconName = 'chat-bubble-outline'; // Icono por defecto para bot
+      }
+    }
+
 
     return (
       <View
@@ -289,7 +327,24 @@ export default function ChatScreen() {
           { alignSelf: isUser ? 'flex-end' : 'flex-start' },
         ]}
       >
-        <ThemedText style={textStyle}>{msg.text}</ThemedText>
+        {isUser ? (
+          // Contenido para mensajes de usuario
+          <ThemedText style={textStyle}>{msg.text}</ThemedText>
+        ) : (
+          // Contenido para mensajes del bot con icono opcional
+          <View style={styles.botContent}>
+            {iconName && (
+              <MaterialIcons
+                name={iconName}
+                size={20}
+                color={iconColor}
+                style={{ marginRight: 8, marginTop: 2 }} // Espacio entre icono y texto
+              />
+            )}
+            <ThemedText style={[textStyle, { flexShrink: 1 }]}>{msg.text}</ThemedText>
+          </View>
+        )}
+        
         <ThemedText style={styles.timestamp}>
           {formatTime(msg.timestamp)}
         </ThemedText>
@@ -340,7 +395,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.textInput}
             placeholder="Escribe un mensaje..."
-            placeholderTextColor="#666"
+            placeholderTextColor="#999" // Color de placeholder más claro
             value={message}
             onChangeText={setMessage}
             multiline

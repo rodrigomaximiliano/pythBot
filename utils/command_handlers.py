@@ -2,9 +2,11 @@
 Módulo para manejar los comandos específicos del bot.
 """
 from typing import Dict, Any, List, Optional
+import random # Importar el módulo random
 from datetime import datetime
 from .date_utils import get_current_datetime, format_datetime, parse_datetime, get_time_until
 from .recordatorios import agregar_recordatorio, obtener_recordatorios, Recordatorio
+from .eventos import agregar_evento, obtener_eventos, Evento # Importar funciones de eventos
 from .intent_recognizer import IntentType
 
 def handle_greeting() -> str:
@@ -42,36 +44,32 @@ def handle_create_reminder(reminder_data: Dict[str, Any], session_id: str) -> st
     Returns:
         str: Mensaje de confirmación
     """
-    text = reminder_data.get('text', '').strip()
-    time_expr = reminder_data.get('time_expression', '').strip()
+    text = reminder_data.get('task', '').strip() # Usar la clave 'task'
+    reminder_time = reminder_data.get('date_time') # Obtener directamente el objeto datetime
     
-    if not text and not time_expr:
+    if not text and reminder_time is None:
         return "No entendí qué quieres que recuerde. ¿Podrías ser más específico?"
     
-    # Si no hay expresión de tiempo, pedir confirmación
-    if not time_expr:
+    # Si no hay fecha/hora, pedir confirmación
+    if reminder_time is None:
         return f"¿Quieres que te recuerde '{text}'? Por favor, indícame cuándo."
     
-    # Intentar parsear la fecha/hora
+    # Agregar el recordatorio
     try:
-        reminder_time = parse_datetime(time_expr)
-        if not reminder_time:
-            return f"No pude entender la hora/fecha '{time_expr}'. ¿Podrías ser más específico?"
-            
-        # Agregar el recordatorio
         success, message = agregar_recordatorio(
             session_id=session_id,
             texto=text,
-            fecha=reminder_time
+            fecha=reminder_time # Usar directamente el objeto datetime
         )
         
         if success:
             time_until = get_time_until(reminder_time)
-            return f"✅ Recordatorio configurado: {text} {time_until}."
-        return f"No pude configurar el recordatorio: {message}"
-        
+            formatted_date = format_datetime(reminder_time)
+            return f"✅ ¡Listo! Te recordaré '{text}' {time_until} ({formatted_date})."
+        return f"Parece que hubo un problema al configurar el recordatorio: {message}"
+
     except Exception as e:
-        return f"Ocurrió un error al configurar el recordatorio: {str(e)}"
+        return f"¡Oh no! Ocurrió un error inesperado al configurar el recordatorio: {str(e)}"
 
 def handle_list_reminders(session_id: str, limit: int = 5) -> str:
     """
@@ -87,8 +85,8 @@ def handle_list_reminders(session_id: str, limit: int = 5) -> str:
     recordatorios = obtener_recordatorios(session_id, solo_activos=True)
     
     if not recordatorios:
-        return "No tienes recordatorios pendientes. ¡Estás al día! 🎉"
-    
+        return "¡Excelente! No tienes recordatorios pendientes. ✨"
+
     # Ordenar por fecha más cercana
     recordatorios_ordenados = sorted(
         recordatorios, 
@@ -96,17 +94,18 @@ def handle_list_reminders(session_id: str, limit: int = 5) -> str:
     )[:limit]
     
     # Formatear la respuesta
-    if len(recordatorios) == 1:
+    if len(recordatorios_ordenados) == 1: # Usar recordatorios_ordenados para el conteo
         respuesta = ["📌 Tienes 1 recordatorio pendiente:"]
     else:
         respuesta = [f"📌 Tienes {len(recordatorios_ordenados)} recordatorios pendientes:"]
-    
+
     for i, recordatorio in enumerate(recordatorios_ordenados, 1):
         tiempo_restante = get_time_until(recordatorio.fecha)
+        formatted_date = format_datetime(recordatorio.fecha)
         respuesta.append(
-            f"{i}. {recordatorio.texto} ({tiempo_restante} - {format_datetime(recordatorio.fecha)})"
+            f"{i}. {recordatorio.texto} ({tiempo_restante} - {formatted_date})"
         )
-    
+
     return "\n".join(respuesta)
 
 def handle_help() -> str:
@@ -129,15 +128,112 @@ Ejemplos:
 - "¿Qué recordatorios tengo pendientes?"
 """
 
+def handle_create_event(event_data: Dict[str, Any], session_id: str) -> str:
+    """
+    Crea un nuevo evento.
+
+    Args:
+        event_data: Datos del evento (título, fecha/hora, ubicación, descripción)
+        session_id: ID de la sesión del usuario
+
+    Returns:
+        str: Mensaje de confirmación
+    """
+    title = event_data.get('task', event_data.get('title', 'un evento')).strip() # Usar 'task' o 'title'
+    time_expr = event_data.get('date_time', '').strip() # Obtener la cadena de fecha/hora
+    ubicacion = event_data.get('ubicacion', '').strip()
+    descripcion = event_data.get('descripcion', '').strip()
+
+    if not title and not time_expr:
+        return "No entendí qué evento quieres crear. ¿Podrías ser más específico?"
+
+    if not time_expr:
+        return f"¿Quieres crear el evento '{title}'? Por favor, indícame cuándo."
+
+    # Intentar parsear la fecha/hora
+    try:
+        event_time = parse_datetime(time_expr)
+        if not event_time:
+            return f"No pude entender la hora/fecha '{time_expr}' para el evento. ¿Podrías ser más específico?"
+
+        # Agregar el evento
+        success, message = agregar_evento(
+            session_id=session_id,
+            titulo=title,
+            fecha=event_time,
+            ubicacion=ubicacion if ubicacion else None,
+            descripcion=descripcion if descripcion else None
+        )
+
+        if success:
+            time_until = get_time_until(event_time)
+            formatted_date = format_datetime(event_time)
+            response_msg = f"✅ ¡Evento creado! '{title}' {time_until} ({formatted_date})."
+            if ubicacion:
+                response_msg += f" En: {ubicacion}."
+            if descripcion:
+                response_msg += f" Descripción: {descripcion}."
+            return response_msg
+        return f"Parece que hubo un problema al configurar el evento: {message}"
+
+    except Exception as e:
+        return f"¡Oh no! Ocurrió un error inesperado al configurar el evento: {str(e)}"
+
+def handle_list_events(session_id: str) -> str:
+    """
+    Lista los eventos pendientes.
+
+    Args:
+        session_id: ID de la sesión del usuario
+
+    Returns:
+        str: Lista formateada de eventos
+    """
+    eventos = obtener_eventos(session_id, solo_activos=True)
+
+    if not eventos:
+        return "¡Genial! No tienes eventos próximos. ✨"
+
+    # Ordenar por fecha más cercana
+    eventos_ordenados = sorted(
+        eventos,
+        key=lambda x: x.fecha
+    )
+
+    # Formatear la respuesta
+    if len(eventos_ordenados) == 1: # Usar eventos_ordenados para el conteo
+        respuesta = ["🗓️ Tienes 1 evento pendiente:"]
+    else:
+        respuesta = [f"🗓️ Tienes {len(eventos_ordenados)} eventos pendientes:"]
+
+    for i, evento in enumerate(eventos_ordenados, 1):
+        tiempo_restante = get_time_until(evento.fecha)
+        formatted_date = format_datetime(evento.fecha)
+        line = f"{i}. {evento.titulo} ({tiempo_restante} - {formatted_date})"
+        if evento.ubicacion:
+            line += f" en {evento.ubicacion}"
+        if evento.descripcion:
+            line += f" ({evento.descripcion})"
+        respuesta.append(line)
+
+
+    return "\n".join(respuesta)
+
+
 # Mapeo de intenciones a manejadores
 HANDLERS = {
-    IntentType.GREETING: lambda *_: handle_greeting(),
-    IntentType.FAREWELL: lambda *_: handle_farewell(),
-    IntentType.TIME_QUERY: lambda *_: handle_time_query(),
-    IntentType.DATE_QUERY: lambda *_: handle_date_query(),
+    IntentType.GREETING: lambda data, session_id: handle_greeting(), # Ajustar lambda para consistencia
+    IntentType.FAREWELL: lambda data, session_id: handle_farewell(), # Ajustar lambda para consistencia
+    IntentType.TIME_QUERY: lambda data, session_id: handle_time_query(), # Ajustar lambda para consistencia
+    IntentType.DATE_QUERY: lambda data, session_id: handle_date_query(), # Ajustar lambda para consistencia
     IntentType.CREATE_REMINDER: lambda data, session_id: handle_create_reminder(data, session_id),
-    IntentType.LIST_REMINDERS: lambda _, session_id: handle_list_reminders(session_id),
-    IntentType.HELP: lambda *_: handle_help(),
+    IntentType.LIST_REMINDERS: lambda data, session_id: handle_list_reminders(session_id), # Ajustar lambda para consistencia
+    IntentType.CREATE_EVENT: lambda data, session_id: handle_create_event(data, session_id), # Nuevo manejador de eventos
+    IntentType.LIST_EVENTS: lambda data, session_id: handle_list_events(session_id), # Nuevo manejador de eventos
+    IntentType.HELP: lambda data, session_id: handle_help(), # Ajustar lambda para consistencia
+    # Agregar placeholder para clima
+    IntentType.WEATHER_QUERY: lambda data, session_id: "La funcionalidad del clima está en desarrollo. ¡Pronto podrás consultarlo! ☀️",
+    IntentType.AFFIRMATION: lambda data, session_id: handle_affirmation() # Nuevo manejador para afirmaciones
 }
 
 def process_intent(intent_type, intent_data: Dict[str, Any], session_id: str) -> str:
@@ -160,3 +256,14 @@ def process_intent(intent_type, intent_data: Dict[str, Any], session_id: str) ->
         return handler(intent_data, session_id)
     except Exception as e:
         return f"¡Ups! Ocurrió un error: {str(e)}"
+
+def handle_affirmation() -> str:
+   """Maneja una afirmación simple."""
+   responses = [
+       "Entendido.",
+       "De acuerdo.",
+       "Claro.",
+       "Perfecto.",
+       "Sí."
+   ]
+   return random.choice(responses)

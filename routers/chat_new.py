@@ -1,3 +1,5 @@
+import parsedatetime as pdt
+import uuid
 from fastapi import APIRouter, HTTPException, Form, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Tuple, Any, Literal, Union
@@ -482,13 +484,14 @@ def generate_response(intent: Intent, entities: Dict[str, Any], session_id: str,
         ])):
         return get_date_info(original_message)
     elif intent == Intent.GREETING:
-        responses = [
-            "¡Hola! Soy tu asistente personal. ¿En qué puedo ayudarte hoy?",
-            "¡Hola! ¿Cómo estás? Estoy aquí para ayudarte.",
-            "¡Buen día! ¿En qué puedo asistirte?",
-            "¡Hola de nuevo! ¿En qué te puedo ayudar hoy?"
-        ]
-        return random.choice(responses)
+        now = datetime.now()
+        hour = now.hour
+        if 5 <= hour < 12:
+            return "¡Buenos días! ¿En qué puedo ayudarte hoy?"
+        elif 12 <= hour < 19:
+            return "¡Buenas tardes! ¿En qué puedo ayudarte hoy?"
+        else:
+            return "¡Buenas noches! ¿En qué puedo ayudarte hoy?"
     
     elif intent == Intent.FAREWELL:
         responses = [
@@ -635,20 +638,64 @@ def parse_reminder(message: str) -> Optional[Tuple[str, datetime]]:
     
     return None
 
+def check_and_notify_reminders():
+    """
+    Verifica los recordatorios próximos y simula el envío de notificaciones.
+    En una aplicación real, esto se ejecutaría periódicamente en segundo plano.
+    """
+    now = datetime.now()
+    notification_threshold = timedelta(minutes=15) # Notificar recordatorios en los próximos 15 minutos
+
+    logger.info("Verificando recordatorios próximos...")
+
+    # Iterar sobre todas las sesiones y sus recordatorios
+    for session_id, user_reminders in reminders.items():
+        reminders_to_notify = []
+        # Crear una copia de la lista para poder modificar el estado 'notified' sin problemas durante la iteración
+        reminders_copy = user_reminders[:]
+        for reminder in reminders_copy:
+            # Asegurarse de que 'date_time' es un objeto datetime y 'notified' existe
+            if isinstance(reminder.get("date_time"), datetime) and not reminder.get("notified", False):
+                time_difference = reminder["date_time"] - now
+
+                # Si el recordatorio está en el futuro y dentro del umbral de notificación
+                if time_difference > timedelta(seconds=0) and time_difference <= notification_threshold:
+                    # Simular envío de notificación (imprimir en log)
+                    logger.info(f"SIMULANDO NOTIFICACIÓN para sesión {session_id}: Recordatorio próximo: '{reminder['task']}' en {time_difference}")
+                    # Marcar como notificado (esto no es persistente con el almacenamiento en memoria)
+                    # En una implementación con DB, actualizarías el registro aquí.
+                    reminder["notified"] = True
+                    reminders_to_notify.append(reminder)
+        
+        # Opcional: podrías hacer algo con reminders_to_notify si quisieras agrupar notificaciones
+
+    logger.info("Verificación de recordatorios completada.")
+
+
 @router.get("/chat/test")
 async def test_endpoint():
     """Endpoint de prueba para verificar que la API está funcionando."""
-    return {"status": "success", "message": "¡La API de chat está funcionando correctamente!"}
+    # Llamar a la función de verificación de recordatorios (para demostración)
+    check_and_notify_reminders()
+    return {"status": "success", "message": "Chat endpoint is working! Reminders checked."}
 
 @router.get("/chat/reminders")
 async def list_reminders(session_id: str = "default"):
     """Endpoint para listar los recordatorios de una sesión."""
     try:
         user_reminders = reminders.get(session_id, [])
+        # Formatear las fechas para una mejor visualización e incluir estado de notificación
+        formatted_reminders = []
+        for r in user_reminders:
+            formatted_reminders.append({
+                "task": r["task"],
+                "date_time": r["date_time"].isoformat() if isinstance(r["date_time"], datetime) else str(r["date_time"]),
+                "notified": r.get("notified", False)
+            })
         return {
             "status": "success",
-            "reminders": user_reminders,
-            "count": len(user_reminders)
+            "reminders": formatted_reminders,
+            "count": len(formatted_reminders)
         }
     except Exception as e:
         logger.error(f"Error al listar recordatorios: {str(e)}")
@@ -661,7 +708,8 @@ async def chat_endpoint(
 ):
     """
     Endpoint principal para el chat.
-    Recibe un mensaje y devuelve una respuesta generada usando NLP.
+    Procesa el mensaje del usuario, detecta la intención, extrae entidades
+    y genera una respuesta.
     """
     try:
         print(f"Mensaje recibido: {message}")
@@ -673,8 +721,8 @@ async def chat_endpoint(
         
         # Detectar la intención y extraer entidades
         intent, entities = detect_intent(message)
-        print(f"Intención detectada: {intent}")
-        print(f"Entidades extraídas: {json.dumps(entities, indent=2, ensure_ascii=False)}")
+        logger.info(f"Intención detectada: {intent}") # Usar logger en lugar de print
+        logger.info(f"Entidades extraídas: {json.dumps(entities, indent=2, ensure_ascii=False)}") # Usar logger en lugar de print
         
         # Generar respuesta basada en la intención
         response_text = generate_response(intent, entities, session_id, message)
@@ -696,6 +744,14 @@ async def chat_endpoint(
         # Limitar el historial a los últimos 10 mensajes
         chat_histories[session_id] = chat_histories[session_id][-10:]
         
+        # Manejar intenciones específicas (mover lógica de recordatorio aquí si es necesario)
+        # La lógica de creación de recordatorios ya está en generate_response y actualiza 'reminders'
+        # Solo necesitamos asegurarnos de que el estado 'notified' se añada al crear.
+        # Revisando generate_response, ya añade "notified": False.
+
+        # Llamar a la función de verificación de recordatorios (para demostración)
+        check_and_notify_reminders()
+
         return {
             "response": response_text,
             "status": "success",
