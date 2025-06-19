@@ -10,6 +10,9 @@ Un asistente virtual inteligente que utiliza procesamiento de lenguaje natural (
 - 🧠 **Aprendizaje por ejemplos** para mejorar la precisión
 - 🚀 **Arquitectura escalable** para añadir nuevas funcionalidades
 
+![Uploading Captura de pantalla 2025-06-19 173703.png…]()
+
+
 ## Estructura del Proyecto
 
 ```
