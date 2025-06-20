@@ -118,9 +118,7 @@ Puedes mejorar la precisión añadiendo más ejemplos en `intent_classifier.py` 
 - [ ] Implementar un sistema de aprendizaje continuo
 - [ ] Crear una interfaz web amigable
 
-## Contribución
 
-¡Las contribuciones son bienvenidas! Por favor, lee las guías de contribución antes de enviar un pull request.
 
 ## Licencia
 
