@@ -40,12 +40,12 @@ app.router.add_api_route(
     methods=["GET"]
 )
 
-# Configuración de CORS
+# Configuración de CORS - Permitir todos los orígenes para desarrollo
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, reemplazar con los dominios permitidos
+    allow_origins=["*"],  # En desarrollo, permitir todos los orígenes
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Range", "X-Total-Count"]
 )
@@ -70,8 +70,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Incluir routers con prefijo /api
 api_prefix = "/api"
 
-# Incluir el router del chat con el prefijo /api
-app.include_router(chat.router, prefix=api_prefix)  # /api/chat/
+# Incluir el router del chat con el prefijo /api/chat
+app.include_router(chat.router, prefix=f"{api_prefix}/chat")  # /api/chat/
 app.include_router(reminders.router, prefix=f"{api_prefix}/reminders")
 app.include_router(events.router, prefix=f"{api_prefix}/events")
 

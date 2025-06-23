@@ -1,5 +1,5 @@
 // Configuración básica para desarrollo local
-const API_BASE_URL = 'http://192.168.0.3:8000';
+const API_BASE_URL = 'http://localhost:8000';
 const API_PREFIX = '/api';
 
 // URL base de la API (sin la barra final)

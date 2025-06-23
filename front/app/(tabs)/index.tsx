@@ -45,20 +45,19 @@ const styles = StyleSheet.create({
     padding: 10, // Relleno dentro de la burbuja
     borderRadius: 15, // Bordes más redondeados
     elevation: 1, // Sombra sutil para Android
-    shadowColor: '#000', // Sombra sutil para iOS
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1.5,
+    boxShadow: '0px 1px 1.5px rgba(0, 0, 0, 0.1)', // Sombra para iOS y web
   },
   userMessage: {
     alignSelf: 'flex-end',
     backgroundColor: Colors.light.tint, // Usar color de tinte del tema
     borderBottomRightRadius: 5, // Ajustar radio de la esquina inferior derecha
+    boxShadow: '0px 1px 1.5px rgba(0, 0, 0, 0.1)'
   },
   botMessage: {
     alignSelf: 'flex-start',
     backgroundColor: '#E5E5EA', // Un gris claro para mensajes del bot
-    borderBottomLeftRadius: 5, // Ajustar radio de la esquina inferior izquierda
+    boxShadow: '0px 1px 1.5px rgba(0, 0, 0, 0.1)',
+    borderBottomLeftRadius: 5 // Ajustar radio de la esquina inferior izquierda
   },
   messageText: {
     fontSize: 16,
