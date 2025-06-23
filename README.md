@@ -10,6 +10,10 @@ Un asistente virtual inteligente que utiliza procesamiento de lenguaje natural (
 - 🧠 **Aprendizaje por ejemplos** para mejorar la precisión
 - 🚀 **Arquitectura escalable** para añadir nuevas funcionalidades
 
+
+![Captura de pantalla 2025-06-19 173703](https://github.com/user-attachments/assets/4ac0a1ef-b305-4938-ad3f-d79975dc641f)
+
+
 ## Estructura del Proyecto
 
 ```
@@ -114,9 +118,7 @@ Puedes mejorar la precisión añadiendo más ejemplos en `intent_classifier.py` 
 - [ ] Implementar un sistema de aprendizaje continuo
 - [ ] Crear una interfaz web amigable
 
-## Contribución
 
-¡Las contribuciones son bienvenidas! Por favor, lee las guías de contribución antes de enviar un pull request.
 
 ## Licencia
 
